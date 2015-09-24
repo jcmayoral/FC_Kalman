@@ -11,16 +11,17 @@ public class NXTRobotDraw{
      */
 	
 	//Side Sizes
-	public static final int side=900;
-	public static final int side2=1800;
+	public static final double side=10;
+	public static final double side2=20;
 	
 	//Instancing Attributes
 	public static CompassHTSensor comp=new CompassHTSensor(SensorPort.S2);
     public static AccelHTSensor accel=new AccelHTSensor(SensorPort.S4);
     
-    // Filter Auxiliar
+   // Filter Auxiliar
     public static double last=0.0;
-
+    public static double tau=0.4;
+    
     //Amazing Class for Integrations
     //speed to position
     public static Integration Ipos;
@@ -28,23 +29,52 @@ public class NXTRobotDraw{
     public static Integration Ivel;
 
     
-    
+    public static void robotRotation()
+    {
+       	double dRadius=4,distance,rotations,degreescount;
+    	double pi=3.1416;
+    	
+    	//perimeter of complete Circle 
+    	distance=pi*dRadius;
+    	//90° Distance
+    	distance=distance/4;
+    	
+    	//Rotations per Motor 2.1 Wheel Diameter
+    	rotations=distance/(pi*2.1);
+    	degreescount=rotations*360;
+    	
+    	Motor.B.backward();
+    	Motor.A.forward();
+    	
+    	//Rotate Angles
+    	Motor.A.rotate((int)degreescount);
+    }
     
     
     //Filtering Degree
 	public static double getDegreeCalc(){
 		
 		//
-		double tau=0.5,degree;
-        
+		double degree;        
         double aux=0.0,e=0.0;		
 		//Filter
     	aux=comp.getDegreesCartesian();
-    	e=(last-aux)*tau;
-    	last=aux;
-    	degree=e+aux;
     	
-    	return degree;
+    	if ((aux-last)<0)
+    	{
+    	last=0.0;
+    	tau=0.4;
+    	}
+    	else
+    	{
+    	tau=(last-aux);
+       	last=aux;
+    	}
+    	
+    	e=(aux-last)*tau;
+     	degree=aux+e;
+    	
+     	return degree;
     	
 	}
 	
@@ -55,14 +85,17 @@ public class NXTRobotDraw{
 	
 	    
 		double result;	
-//		result=(double)accel.getZAccel();
+
 		//Obtaining Acceleration Value Axis X
 		result=(double)accel.getXAccel();
+		result=(result*9.81)/200;
 		//Integration for obtaining speed
 		result=Iv.addReading(result);
 		//Integrating again for obtaining position
 		result=Ip.addReading(result);
 		
+		if (result<0.0)
+			result=0.01;
 		return result;
 		
 	}
@@ -74,34 +107,8 @@ public class NXTRobotDraw{
 	
     public static void main(String[] args) throws Exception {
     	       
-//    	double[][] H={{1,0},{0,1}}; //Sensor Model we don't have it so we are skipping
-//    	double[][] Pk={{1,0},{0,1}}; //Covariance Matrix is eye Matrix because we only have one dimension sensor
-//    	double[][] Fk={{1,0},{0,1}}; //Prediction State Matrix
-//        double[][] degree={{0},{0}};  //Degree Arraay "X"
-//        
-/*
- * Update Pk = Fk*Pk(k-1)*fkT+Qk (Qk=process noise)
- * xk=
- * 
- * Hk=xk
- */
-       
-        /*
- * x=x
- * p=p+q
- * k=p/(p+r)
- * x=x+k*(measurement-x)
- * p=(1-k)*p
- * 
- * x filtered value
- * q process noise 
- * r sensor node
- * p estimated error
- * k Kalmann Gain
- * 
- * start with with q, r, p and x
- */
-        
+
+        double realmeasure;
         double posChange;
         double initialDegree;
         double finalDegree;
@@ -117,21 +124,14 @@ public class NXTRobotDraw{
         comp.resetCartesianZero();
      
         //Setting Speed
-        Motor.A.setSpeed(30);
-        Motor.C.setSpeed(30);
+        Motor.A.setSpeed(120);
+        Motor.B.setSpeed(120);
              
         
         //while (!touch.isPressed())
         for(int i=0;i<12;i++)
         {
-//KALMAN
-//        	x=comp.getDegreesCartesian();
-//        	p=p+q;
-//        	k=p/(p+r);
-//        	degree=x+k*(degree-x);
-//        	p=(1-k)*p;
-        	
-        	
+	
             
             //speed to position
             Ipos=new Integration(0,0);
@@ -156,14 +156,14 @@ public class NXTRobotDraw{
         	
         	//Stop without Inertia
         	Motor.A.stop(true);
-        	Motor.C.stop(true);
+        	Motor.B.stop(true);
         	
         	//Wait to See
         	Thread.sleep(1000);
         	
         	//Rotating Robot
         	Motor.A.forward();
-            Motor.C.forward();
+            Motor.B.forward();
         	
             
             //Going to front
@@ -173,7 +173,7 @@ public class NXTRobotDraw{
             
             //Stop without Inertia
         	Motor.A.stop(true);
-        	Motor.C.stop(true);
+        	Motor.B.stop(true);
         	
         	
         	// Calculating Degrees
@@ -188,34 +188,17 @@ public class NXTRobotDraw{
          	System.out.print(initialDegree+" I.Deg. \n");
         	System.out.print(finalDegree+" F.Deg. \n");
 
+        	Motor.A.stop(true);
+            Motor.B.stop(true);
+
         	//Wait to See Screen
         	Thread.sleep(1000);
-           	
-        	//Starts Rotating
-        	Motor.A.forward();
-            Motor.C.backward();
-            
-           
-            
-        	do
-        	{               
-        	initialDegree=getDegreeCalc();
-        	System.out.print(initialDegree+"\n");
+        	
+        	
+        	//Rotate
+        	robotRotation();
+     
 
-        	//When Movement doesn't pass by 0°
-        	if (finalDegree>=90)
-        		if (initialDegree>=finalDegree )
-        			flag=false;
-        							
-        	//When Movement pass by 0°
-        	if (finalDegree<90)
-        		if (finalDegree>=initialDegree)
-        			flag=false;
-        	}
-        	while (flag);
-
-        	 //Reset Rotating
-            flag=true;
         	
         }
  
